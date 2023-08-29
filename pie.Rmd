@@ -1,0 +1,88 @@
+---
+title: "pie_charts"
+output: html_document
+date: "2023-08-24"
+---
+
+```{r}
+library(sf)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(spatstat)
+library(raster)
+library(fpc)
+library(sp)
+library(plotly)
+```
+
+```{r}
+csv0 <- read.csv('../toR.csv')
+csv_c <- read.csv('../data/top2.csv')
+strat0 <- read.csv('../data/strat_stats.csv')
+```
+
+```{r}
+csv0 <-csv0%>%
+  mutate(., level = ifelse(from_stra >=0 &from_stra <2, 1,
+                    ifelse(from_stra >=2 &from_stra <4, 2,
+                    ifelse(from_stra >=4 &from_stra <=6, 3,0))))
+```
+
+
+```{r}
+csv0r <-csv0%>%
+  filter(.,type %in% c('cloths','beautys','hgs','supers','electrics'))%>%
+  dplyr::filter(.,level==3 &day==171)%>%
+  group_by(day,type)%>%
+  summarise(rv=n())%>%
+  dplyr::select(., c('type','rv'))
+
+csv0m<-csv0%>%
+   filter(.,type %in% c('cloths','beautys','hgs','supers','electrics'))%>%
+  dplyr::filter(.,level==2&day==171)%>%
+  group_by(day,type)%>%
+  summarise(mv=n())%>%
+  dplyr::select(., c('type','mv'))
+
+
+csv0p <-csv0%>%
+   filter(.,type %in% c('cloths','beautys','hgs','supers','electrics'))%>%
+  dplyr::filter(.,level==1&day==171)%>%
+  group_by(day,type)%>%
+  summarise(pv=n())%>%
+  dplyr::select(., c('type','pv'))
+
+```
+
+merge cloth and beautys
+```{r}
+
+csv0r[nrow(csv0r) + 1,]<-list(171,'beautys+cloths',13)
+
+csv0r<-csv0r[-c(1:2),]
+
+csv0p[nrow(csv0p) + 1,]<-list(171,'beautys+cloths',4)
+
+csv0p<-csv0p[-c(1:2),]
+
+```
+
+plot pie charts
+```{r}
+colors <- c('#0081A7', '#EED19C', '#FED9B7', '#F07167')
+
+fig <- plot_ly(csv0p, labels = ~type, values = ~pv, type = 'pie',
+        textposition = 'inside',
+        textinfo = 'label+percent',
+        insidetextorientation='radial',
+        insidetextfont = list(color = '#FFFFFF'),
+        hoverinfo = 'text',
+        #text = ~paste('$', X1960, ' billions'),
+        marker = list(colors = colors,
+                      line = list(color = '#FFFFFF', width = 1)),
+                      #The 'pull' attribute can also be used to create space between the sectors
+        showlegend = FALSE)
+fig
+```
+
