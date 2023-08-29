@@ -1,0 +1,353 @@
+---
+title: "distribution map"
+output: html_document
+date: "2023-08-04"
+---
+
+```{r}
+library(sf)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(ggmap)
+library(ggplot2)
+```
+
+```{r}
+#csv1 <- read.csv('toR.csv')
+#points <- csv1 %>%
+#  st_as_sf(., coords=c('lng','lat'),
+#           crs=4326)
+#st_write(points, 'p.shp')
+#write.csv(points, 'p.csv')
+```
+
+
+```{r}
+csv0 <- read.csv('../p0.csv')
+
+shp0 <- st_read('../data/metro_area.shp')
+
+strat0 <- read.csv('../data/strat_stats.csv')
+
+csv0 <- csv0 %>%
+  rename(., to_ID=ZAT)%>%
+  rename(., to_stra=stratum)
+```
+
+```{r}
+tmap_mode('plot')
+tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp0)+
+  tm_polygons('stratum',
+              breaks=c(0,1,2,3,4,5,6),
+              #style = 'pretty',
+              palette='Blues')+
+  tm_legend(show=TRUE)+
+  tm_layout(frame=FALSE)
+
+```
+
+
+```{r}
+strat <- strat0 %>%
+  dplyr::select(., c('day','count'))
+
+names(strat) <- c('day', 'total_count')
+
+#csv1 <- csv0 %>%
+#  merge(.,
+#        strat,
+#        by.x= 'day',
+#        by.y = 'day')
+```
+
+group by which ZAT people visit
+```{r}
+df_to_ZAT = csv0 %>%
+  group_by(to_ID,day) %>%
+  summarise(visits = n())
+
+df_to_ZAT = df_to_ZAT%>%
+  merge(., strat,
+        by.x= 'day',
+        by.y = 'day')
+
+df_to_ZAT$to_ratio=df_to_ZAT$visits/df_to_ZAT$total_count*1000000
+```
+
+```{r}
+shp_to_ZAT <- shp0 %>%
+  merge(.,
+        df_to_ZAT,
+        by.x = 'ZAT',
+        by.y = 'to_ID')
+
+shp_to_ZAT_171 <- shp_to_ZAT %>%
+  dplyr::filter(day==171)
+```
+
+on tax free day
+```{r}
+library(spData)
+tmap_mode('plot')
+breaks = c(0,10,20,30,40,50,60,80,100)# uniform break scale
+break1 = c(0,5,10,15,20,25,30,45)#break for lockdown
+tm1 <- tm_basemap(leaflet::providers$OpenStreetMap)+
+  tm_shape(shp_to_ZAT_171)+
+  tm_polygons('to_ratio',
+              breaks=break1,
+              border.alpha = 0.2,
+              #style = 'pretty',
+              palette='OrRd')+
+  tm_legend(show=FALSE)+
+  tm_layout(frame=FALSE)
+tm1
+```
+
+
+before day 79, friday,mean
+```{r}
+
+shp_to_ZAT_79 <- shp_to_ZAT%>%
+  dplyr::filter(., day<=79 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(to_mean_ratio = mean(to_ratio))
+
+tmap_mode('plot')
+tm2 <- tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_to_ZAT_79)+
+  tm_polygons('to_mean_ratio',
+              breaks=breaks,
+              #style = 'pretty',
+              palette='OrRd')+
+  tm_legend(show=FALSE)+
+  tm_compass(position = c(0,0.85))+
+  tm_scale_bar(position = c(0,0.02))+
+  tm_layout(frame=FALSE)
+tm2
+```
+
+during lockdown,after day 79, and before 227, friday,mean
+```{r}
+shp_to_ZAT_170 <- shp_to_ZAT%>%
+  dplyr::filter(., day>79 & day<=227 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(to_mean_ratio = mean(to_ratio))
+
+#tmap_mode('view')
+
+tm3 <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_to_ZAT_170)+
+  tm_polygons('to_mean_ratio',
+              breaks=break1,
+              border.alpha  = 0.2,
+              #style = 'pretty',
+              palette='OrRd')+
+  tm_layout(legend.position = c(1,0.03))+
+  tm_compass(position = c(0,0.85))+
+  tm_scale_bar(position = c(0,0.02))+
+  tm_layout(frame=FALSE)
+tm3
+```
+
+after lockdown,>21 sept
+```{r}
+legend <- tm_shape(shp_to_ZAT_170) +
+    tm_polygons("Visit count",
+                palette="OrRd") +
+    tm_scale_bar(position=c(0.2,0.04), text.size=0.6)+
+    tm_compass(north=0, position=c(0.65,0.6))+
+    tm_layout(legend.only = TRUE, legend.position=c(0.2,0.25),asp=0.1)
+
+t=tmap_arrange(tm3,tm2,legend,ncol=2)
+t
+```
+
+mix map
+```{r}
+legend <- tm_shape(shp_to_ZAT_79) +
+    tm_polygons("Visit count",
+                palette="OrRd") +
+    tm_scale_bar(position=c(0.2,0.04), text.size=0.6)+
+    tm_compass(north=0, position=c(0.65,0.6))+
+    tm_layout(legend.only = TRUE, legend.position=c(0.2,0.25),asp=0.1)
+
+t=tmap_arrange(tm1,tm3,tm2,legend,ncol=2)
+t
+```
+
+
+group by where people from
+```{r}
+df_from_ZAT = csv0 %>%
+  group_by(from_ID,day) %>%
+  summarise(visits = n())
+
+df_from_ZAT = df_from_ZAT%>%
+  merge(., strat,
+        by.x= 'day',
+        by.y = 'day')
+
+df_from_ZAT$from_ratio=df_from_ZAT$visits/df_from_ZAT$total_count*1000000
+```
+
+merge the ratio to shp
+```{r}
+shp_from_ZAT <- shp0 %>%
+  merge(.,
+        df_from_ZAT,
+        by.x = 'ZAT',
+        by.y = 'from_ID')
+
+shp_from_ZAT_171 <- shp_from_ZAT %>%
+  dplyr::filter(day==171)
+```
+
+on tax free day
+```{r}
+
+breaks = c(0,10,20,30,40,50,60,80,100,160)
+tm4 <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_from_ZAT_171)+
+  tm_polygons('from_ratio',
+              breaks=breaks,
+              style = 'pretty',
+              palette='OrRd')
+tm4
+```
+
+before day 79, friday,mean
+```{r}
+shp_from_ZAT_79 <- shp_from_ZAT%>%
+  dplyr::filter(., day<=79 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(from_mean_ratio = mean(from_ratio))
+
+
+tm5 <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_from_ZAT_79)+
+  tm_polygons('from_mean_ratio',
+              breaks=breaks,
+              #style = 'pretty',
+              palette='OrRd')
+tm5
+```
+
+79-170, friday,mean
+```{r}
+shp_from_ZAT_170 <- shp_from_ZAT%>%
+  dplyr::filter(., day>79 &day<=170 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(from_mean_ratio = mean(from_ratio))
+
+
+tm6 <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_from_ZAT_170)+
+  tm_polygons('from_mean_ratio',
+              breaks=break1,
+              #style = 'pretty',
+              palette='OrRd')
+tm6
+```
+
+```{r}
+
+t1=tmap_arrange(tm1,tm4,tm2,tm5, tm3,tm6,ncol=2)
+t1
+```
+
+
+diff between from and to(to-from)
+```{r}
+
+df_ZAT_diff<- df_to_ZAT%>%
+  merge(.,
+        df_from_ZAT,
+,
+        by.x=c('day', 'to_ID'),
+        by.y=c('day', 'from_ID'))
+
+df_ZAT_diff$diff_r=df_ZAT_diff$to_ratio - df_ZAT_diff$from_ratio
+
+shp_diff_ZAT<-shp0 %>%
+  merge(.,
+        df_ZAT_diff,
+        by.y='to_ID',
+        by.x='ZAT')
+  
+  
+shp_diff_171<-shp0 %>%
+  merge(.,
+        df_ZAT_diff,
+        by.y='to_ID',
+        by.x='ZAT')%>%
+  dplyr::filter(., day==171)
+
+tmap_mode('plot')
+
+tm1_diff <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_diff_171)+
+  tm_polygons('diff_r',
+              #breaks=c(-100,-50,-20,-10,0,10,20,50,100),
+              style = 'pretty',
+              midpoint=NA,
+              palette='RdBu')
+tm1_diff
+  
+```
+
+
+before day 79, friday,mean
+```{r}
+shp_diff_79<-shp0 %>%
+  merge(.,
+        df_ZAT_diff,
+        by.y='to_ID',
+        by.x='ZAT')%>%
+  dplyr::filter(., day<=79 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(diff_mean_r = mean(diff_r))
+
+tmap_mode('plot')
+
+tm2_diff <- tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_diff_79)+
+  tm_polygons('diff_mean_r',
+              #breaks=c(-100,-50,-20,-10,0,10,20,50,100),
+              style = 'pretty',
+              midpoint=NA,
+              palette='RdBu')
+tm2_diff
+```
+
+
+79-170, friday,mean
+```{r}
+shp_diff_170<-shp0 %>%
+  merge(.,
+        df_ZAT_diff,
+        by.y='to_ID',
+        by.x='ZAT')%>%
+  dplyr::filter(., day>79 & day<=170 & day %% 7==3)%>%
+  group_by(ZAT) %>%
+  summarise(diff_mean_r = mean(diff_r))
+
+tmap_mode('plot')
+
+tm3_diff <- #tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp_diff_170)+
+  tm_polygons('diff_mean_r',
+              breaks=c(-40,-30,-20,-10,0,10,20),
+              #style = 'pretty',
+              midpoint=NA,
+              palette='RdBu')
+tm3_diff
+```
+
+```{r}
+st_write(shp_to_ZAT, 'shp_to_ZAT.shp',layer_options = "SHPT=POLYGONZ")
+st_write(shp_from_ZAT, 'shp_from_ZAT.shp',layer_options = "SHPT=POLYGONZ")
+st_write(shp_diff_ZAT, 'shp_diff_ZAT.shp', layer_options = "SHPT=POLYGONZ")
+```
+
