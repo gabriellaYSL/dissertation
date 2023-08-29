@@ -1,0 +1,84 @@
+---
+title: "z-score"
+output: html_document
+date: "2023-08-23"
+---
+
+```{r}
+library(sf)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(spatstat)
+library(raster)
+library(fpc)
+library(sp)
+```
+
+```{r}
+csv0 <- read.csv('../toR.csv')
+csv_centre <- read.csv('../data/top2.csv')
+strat0 <- read.csv('../data/strat_stats.csv')
+```
+
+
+```{r}
+csv1 <- csv0 %>%
+  group_by(type,day) %>%
+  summarise(visits = n())
+
+csv1 <- csv1%>%
+  merge(., strat0,
+        by.x= 'day',
+        by.y = 'day')
+
+csv1<-csv1%>%
+  dplyr::select(., c('day','type','visits','count'))
+
+csv1$r=csv1$visits/csv1$count*1000000
+
+```
+```{r}
+csv1_centre <- csv_centre %>%
+  group_by(type,day) %>%
+  summarise(visits = n())
+
+csv1_centre <- csv1_centre%>%
+  merge(., strat0,
+        by.x= 'day',
+        by.y = 'day')
+
+csv1_centre<-csv1_centre%>%
+  dplyr::select(., c('day','type','visits','count'))
+
+csv1_centre$r=csv1_centre$visits/csv1_centre$count*1000000
+
+```
+
+z-score function
+```{r}
+zs<-function(x){
+  (abs(x-mean(x))/sd(x))
+}
+```
+
+whole BMA
+```{r}
+zs_cloth<-csv1%>%
+  dplyr::filter(., type=='dentists')%>%
+  dplyr::filter(., day>79 & day<227 & day%%7==3)
+
+zs_cloth%>%mutate(across(r,zs))->z_score
+```
+
+centre areas
+```{r}
+zsc_cloth<-csv1_centre%>%
+  dplyr::filter(., type=='dentists')%>%#change type to caculate other types
+  dplyr::filter(., day>79 & day<227 & day%%7==3)
+
+zsc_cloth%>%mutate(across(r,zs))->zc_score
+```
+
+
+
