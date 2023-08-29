@@ -1,0 +1,188 @@
+---
+title: "rich and poor"
+output: html_document
+date: "2023-08-23"
+---
+
+```{r}
+library(sf)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(spatstat)
+library(raster)
+library(fpc)
+library(sp)
+library(plotly)
+```
+
+```{r}
+csv0 <- read.csv('../toR.csv')
+csv_c <- read.csv('../data/top2.csv')
+strat0 <- read.csv('../data/strat_stats.csv')
+```
+
+classify on home stratum
+```{r}
+csv0 <-csv_c%>%
+  mutate(rich = ifelse(from_stra>=4.5, 1, 0))
+
+csv0 <-csv0%>%
+  mutate(., level = ifelse(from_stra >=0 &from_stra <=1, 1,
+                    ifelse(from_stra >1 &from_stra <=2, 2,
+                    ifelse(from_stra >2 &from_stra <=3, 3,
+                    ifelse(from_stra >3 &from_stra <4, 4,
+                    ifelse(from_stra >4 &from_stra <=5, 5,
+                    ifelse(from_stra >5 &from_stra <=6, 6,
+                           0)))))))
+
+csv06 <-csv0%>%
+  dplyr::filter(.,level==6)%>%
+  group_by(day)%>%
+  summarise(v=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(visit=v/count*1000000)%>%
+  mutate(.,level='6')%>%
+  dplyr::select(c('day','visit','level'))
+
+csv05 <-csv0%>%
+  dplyr::filter(.,level==5)%>%
+  group_by(day)%>%
+  summarise(v=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(visit=v/count*1000000)%>%
+  mutate(.,level='5')%>%
+  dplyr::select(c('day','visit','level'))
+
+csv04 <-csv0%>%
+  dplyr::filter(.,level==4)%>%
+  group_by(day)%>%
+  summarise(v=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(visit=v/count*1000000)%>%
+  mutate(.,level='4')%>%
+  dplyr::select(c('day','visit','level'))
+
+csv0r <-csv0%>%
+  dplyr::filter(.,level==3)%>%
+  group_by(day)%>%
+  summarise(rv=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(rr=rv/count*1000000)%>%
+  mutate(.,level='3')
+
+csv0m<-csv0%>%
+  dplyr::filter(.,level==2)%>%
+  group_by(day)%>%
+  summarise(mv=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(mr=mv/count*1000000)%>%
+  mutate(.,level='2')
+
+csv0p <-csv0%>%
+  dplyr::filter(.,level==1)%>%
+  group_by(day)%>%
+  summarise(pv=n())%>%
+  merge(.,
+        strat0,
+        by='day')%>%
+  mutate(pr=pv/count*1000000)%>%
+  mutate(.,level='1')
+```
+
+```{r}
+csv0rp<-csv0p%>%
+  merge(.,
+        csv0r,
+        by='day')%>%
+  merge(.,
+        csv0m,
+        by='day')
+
+#poor/rich
+csv0rp$p_r=csv0rp$pv/csv0rp$rv 
+```
+
+
+```{r}
+csv0p<-csv0p%>%
+  rename(visit=pr)%>%
+  dplyr::select(c('day','visit','level'))
+csv0m<-csv0m%>%
+  rename(visit=mr)%>%
+  dplyr::select(c('day','visit','level'))
+csv0r<-csv0r%>%
+  rename(visit=rr)%>%
+  dplyr::select(c('day','visit','level'))
+
+csv1rp<-csv0p%>%
+  rbind(., csv0r)%>%
+  rbind(.,csv0m)%>%
+  rbind(.,csv04)%>%
+  rbind(.,csv05)%>%
+  rbind(.,csv06)
+```
+
+
+```{r}
+csv1rp<-csv1rp%>%
+  mutate(.,per=ifelse(day<=79,'pre',
+                      ifelse(day>79&day<=227,'lockdown',
+                             ifelse(day>227,'open','0'))))
+  
+```
+
+```{r}
+pre<-csv0rp%>%
+  filter(., day<=79)
+
+lockdown<-csv0rp%>%
+  filter(.,day>79&day<227)
+```
+
+box plot on visit of different people during different periods
+```{r}
+fig <- plot_ly(ggplot2::diamonds, x = ~csv1rp$level, y = ~csv1rp$visit, color = ~csv1rp$epi, type = "box")
+fig <- fig %>% layout(boxmode = "group")
+
+fig
+```
+
+```{r}
+csv2rp<-csv1rp%>%
+  filter(., level=='1'&level=='6')
+
+fig <- plot_ly(ggplot2::diamonds, x = ~csv2rp$per, y = ~csv2rp$visit, color = ~csv2rp$level, type = "box",colors='viridis')
+fig <- fig %>% layout(boxmode = "group")
+
+fig
+```
+
+calculate the visit decrease of each level(lockdown/per-epidemic)
+```{r}
+pre_p_ave<-mean(pre$pr)
+ld_p_ave<-mean(lockdown$pr)
+ld_p_ave/pre_p_ave
+
+
+pre_m_ave<-mean(pre$mr)
+ld_m_ave<-mean(lockdown$mr)
+ld_m_ave/pre_m_ave
+
+pre_r_ave<-mean(pre$rr)
+ld_r_ave<-mean(lockdown$rr)
+ld_r_ave/pre_r_ave
+
+
+```
+
