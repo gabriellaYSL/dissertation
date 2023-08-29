@@ -1,0 +1,289 @@
+---
+title: "point_ana"
+output: html_document
+date: "2023-08-07"
+---
+```{r}
+library(sf)
+library(tidyverse)
+library(tmap)
+library(tmaptools)
+library(spatstat)
+library(raster)
+library(fpc)
+library(sp)
+library(dbscan)
+library(ggplot2)
+```
+
+```{r}
+p_csv <- read.csv('../toR.csv')
+p0 <- st_read('../p.shp')
+p1<-p_csv%>%
+  st_as_sf(., coords=c('lng','lat'),crs=4326)
+
+
+shp0<-st_read('../data/metro_area.shp')
+sf::sf_use_s2(FALSE)
+```
+
+```{r}
+tmap_mode("plot")
+tm_shape(shp0) +
+  tm_polygons(col = NA, alpha = 0.5) +
+tm_shape(p0) +
+  tm_dots(col = "blue")+
+  tmap_options(check.and.fix = TRUE)
+```
+
+classify rich and poor
+```{r}
+rich<-p_csv%>%
+  filter(., from_stra>4.5&day==171)
+
+poor<-p_csv%>%
+  filter(., from_stra<1.5&day==171)
+```
+
+density plot of rich visit on tax free day  with basemap
+
+```{r}
+ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")+
+
+  stat_density_2d(data=rich,aes(x=lng,y=lat,fill=..level..),geom='polygon')+
+  scale_fill_continuous(type='viridis')+
+  theme_bw()
+```
+
+
+```{r}
+library(RColorBrewer)
+ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")+
+  ## 添加密度曲线
+  geom_density2d(data = rich,aes(x=lng, y=lat),size = 0.1)+
+  ## 热力图
+  stat_density2d(data = rich,aes(x=lng, y=lat, fill = ..level.., alpha = ..level..),size = 0.3, bins = 40, geom = "polygon")+
+  ## 填充颜色和透明度设置
+  scale_fill_gradientn(colours=rev(brewer.pal(8, "Spectral")))+
+  scale_alpha(range = c(0, 0.3))+
+  #theme(legend.position = "none")+
+  ## 添加点
+  geom_point(data = rich,aes(x=lng, y=lat),
+             colour = "tomato",size = 0.5,alpha = 0.8)+
+  ggtitle("Density of rich people visits")+
+  theme_bw()
+```
+
+
+ density plot of poor visit on tax free day
+ 
+```{r}
+ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")+
+
+  stat_density_2d(data=poor,aes(x=lng,y=lat,fill=..level..),geom='polygon')+
+  scale_fill_continuous(type='viridis')+
+  theme_bw()
+```
+
+```{r}
+library(RColorBrewer)
+ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")+
+  ## 添加密度曲线
+  geom_density2d(data = poor,aes(x=lng, y=lat),size = 0.1)+
+  ## 热力图
+  stat_density2d(data = poor,aes(x=lng, y=lat, fill = ..level.., alpha = ..level..),size = 0.3, bins = 40, geom = "polygon")+
+  ## 填充颜色和透明度设置
+  scale_fill_gradientn(colours=rev(brewer.pal(8, "Spectral")))+
+  scale_alpha(range = c(0, 0.3))+
+  #theme(legend.position = "none")+
+  ## 添加点
+  geom_point(data = poor,aes(x=lng, y=lat),
+             colour = "tomato",size = 0.5,alpha = 0.8)+
+  ggtitle("Density of poor people visits")+
+  theme_bw()
+```
+  
+
+
+analyse before epidemic
+```{r}
+library(rgdal)
+library(maps)
+shp1<-readOGR('../data/metro_area.shp')
+
+map<-ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")
+map
+```
+
+geographic filter
+```{r}
+p0 <- p0[shp0,]
+p1 <- p1[shp0,]
+```
+
+```{r}
+p171 <- p1 %>%
+  dplyr::filter(day==73)#change the day(10,24,38,52,66,73) to do DBscan on different days
+```
+
+
+```{r}
+tmap_mode("plot")
+tm_shape(shp0) +
+  tm_polygons(col = NA, alpha = 0.5) +
+tm_shape(p171) +
+  tm_dots(col = "blue")+
+  tmap_options(check.and.fix = TRUE)
+```
+
+
+
+```{r}
+#now run the dbscan analysis
+p171_points <- p171 %>%
+  as(., 'Spatial')%>%
+
+  coordinates(.)%>%
+  as.data.frame()
+
+
+```
+
+density map before epidemic
+```{r}
+library(RColorBrewer)
+ggplot()+
+  geom_polygon(data=shp1, aes(x=long,y=lat,group=group),fill = "lightblue",colour = "white")+
+  ## 添加密度曲线
+  geom_density2d(data = p171_points,aes(x=coords.x1, y=coords.x2),size = 0.1)+
+  ## 热力图
+  stat_density2d(data = p171_points, aes(x = coords.x1, y =  coords.x2, fill = ..level.., alpha = ..level..),size = 0.3, bins = 40, geom = "polygon")+
+  ## 填充颜色和透明度设置
+  scale_fill_gradientn(colours=rev(brewer.pal(8, "Spectral")))+
+  scale_alpha(range = c(0, 0.3))+
+  #theme(legend.position = "none")+
+  ## 添加点
+  geom_point(data = p171_points,aes(x = coords.x1,y = coords.x2),
+             colour = "tomato",size = 0.5,alpha = 0.8)+
+  ggtitle("Density of pre-epidemic visits")+
+  theme_bw()
+  
+```
+
+DBScans
+```{r}
+
+db <- p171_points %>%
+  fpc::dbscan(.,eps = 0.012, MinPts = 110)
+
+#now plot the results
+plot(db, p171_points, main = "DBSCAN Output", frame = F)
+plot(shp0$geometry, add=T)
+```
+
+```{r}
+
+
+p171_points%>%
+  dbscan::kNNdistplot(.,k=5)
+```
+
+```{r}
+p171_points<- p171_points %>%
+  mutate(dbcluster=db$cluster)
+
+tosf <- p171_points %>%
+  st_as_sf(., coords=c('coords.x1', 'coords.x2'),
+           crs=4326)%>%
+  filter(dbcluster>0)
+```
+
+plot dbscan results
+```{r}
+library(RColorBrewer)
+colours<-get_brewer_pal('Set2', n=12)
+
+tmap_mode('plot')
+
+tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(shp0)+
+  tm_polygons(col = NA, alpha = 0.7,
+              border.alpha=0.2)+
+  tm_borders(lwd=0.1)+
+
+#  tm_polygons('stratum',
+#              breaks=c(0,1,2,3,4,5,6),
+#              #style = 'pretty',
+#              palette='Blues')+
+tm_shape(tosf)+
+  tm_dots(col = 'dbcluster', size=0.05, palette=colours, style='cat')+
+  tm_layout(legend.position = c(1,0.02),
+            frame = FALSE)
+
+```
+
+
+```{r}
+example<-st_intersects(shp0, tosf)
+
+example
+```
+
+extract centres shp
+```{r}
+centre_shp <- shp0%>%
+  mutate(n = lengths(st_intersects(., tosf)))%>%
+  filter(., n>0)
+
+tm_basemap(server = 'OpenStreetMap')+
+  tm_shape(centre_shp)+
+  tm_polygons(col=NA)
+
+st_write(centre_shp, '../data/centre_area10.shp',layer_options = "SHPT=POLYGONZ")
+```
+
+
+```{r}
+centre <- read_csv('../data/centres.csv')
+```
+```{r}
+shp1 <- shp0%>%
+  merge(., centre, by='ZAT')%>%
+  dplyr::filter(., count>=3)
+
+
+ 
+
+st_write(shp1, '../data/centre_area_f.shp',layer_options = "SHPT=POLYGONZ")
+```
+
+
+```{r}
+centre<- st_read('../data/centre_area_f.shp')
+p_centre <- p1[centre,]
+
+st_write(p_centre,'../data/p_centre_f.shp')
+write_csv(p_centre,'../data/top2.csv')
+```
+
+
+```{r}
+tmap_mode("view")
+tm_basemap('OpenStreetMap')+
+#tm_shape(shp0)+
+#  tm_polygons(col = NA, alpha = 0.5, border.alpha=0.2)+
+tm_shape(shp1)+ 
+  tm_polygons(col = 'red', alpha = 0.5,borders.col='black') +
+tm_layout(frame=FALSE,
+          legend.show = TRUE)+
+tm_compass(position = c(0,0.85))+
+  tm_scale_bar(position = c(0.6,0.02))
+
+```
+
+
